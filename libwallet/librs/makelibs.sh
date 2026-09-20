@@ -21,7 +21,7 @@ function _cargo() {
 set -x
 
 IOS_TARGETS="aarch64-apple-ios x86_64-apple-ios aarch64-apple-ios-sim"
-ALL_TARGETS="aarch64-unknown-linux-musl x86_64-unknown-linux-musl i686-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android $IOS_TARGETS"
+ALL_TARGETS="aarch64-unknown-linux-musl x86_64-unknown-linux-musl i686-unknown-linux-musl aarch64-apple-darwin x86_64-apple-darwin aarch64-linux-android x86_64-linux-android $IOS_TARGETS"
 
 # Allow callers to override the targets we'll build
 if [ -z "$TARGETS" ]; then
