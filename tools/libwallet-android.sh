@@ -54,10 +54,11 @@ export CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 # The -trimpath and -ldflags are passed on to go build and are part of keeping the build reproducible.
 # Note that we bind & build two packages top-level libwallet and newop.
 go run golang.org/x/mobile/cmd/gomobile bind \
-    -target="android" -o "$libwallet" \
+    -target=android/arm64,android/amd64 \
+    -o "$libwallet" \
     -androidapi 21 \
-    -trimpath -ldflags="-buildid=. -v" \
-    . ./newop ./app_provided_data ./libwallet_init
+    -trimpath -ldflags="-buildid=" -v \
+    ./newcop ./app_provided_data ./libwallet_init
 
 st=$?
 echo "rebuilt gomobile with status $? to $libwallet"
