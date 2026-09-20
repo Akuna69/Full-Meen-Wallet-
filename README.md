@@ -1,4 +1,3 @@
-![meen](https://meen.com/images/github-banner-v2.png)
 
 ## About
 
