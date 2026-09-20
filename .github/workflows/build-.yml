@@ -47,7 +47,6 @@ jobs:
           tools/bootstrap-gomobile.sh
           tools/libwallet-android.sh
 
-
       - name: Crear google-services.json de prueba
         run: |
           python3 - << 'EOF'
