@@ -44,9 +44,11 @@ jobs:
 
       - name: Build Go Wallet Libraries for Android
         run: |
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_SDK_ROOT}"
           chmod +x tools/*.sh
           tools/bootstrap-gomobile.sh
-          tools/libwallet-android.sh
+          ./tools/libwallet-android.sh android/apolloui/libs/libwallet.aar
 
       - name: Crear google-services.json de prueba
         run: |
@@ -83,7 +85,6 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          export JAVA_HOME=$JAVA_HOME_17_X64
           export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
           chmod +x tools/*.sh
           ./gradlew :android:apolloui:assembleProdDebug --console=plain
