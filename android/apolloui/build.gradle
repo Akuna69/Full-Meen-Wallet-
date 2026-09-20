@@ -270,7 +270,7 @@ android {
 
             // Production application class, which is interpolated into AndroidManifest.xml
             manifestPlaceholders = [
-                    usesCleartextTraffic: 'false'
+                    usseCleartextTraffic: 'false'
             ]
 
             // server
@@ -385,7 +385,7 @@ android {
         // https://www.veskoiliev.com/running-android-unit-instrumentation-tests-from-the-console/
         unitTests.all {
             testLogging {
-                outputsUpToDateWhen { false }
+                outputs.upToDateWhen { false }
                 events "passed", "failed", "standardError"
                 showCauses true
                 showExceptions true
@@ -410,15 +410,7 @@ ext {
 }
 
 dependencies {
-    api(project(':common')) {
-        // bitcoinj has a protobuf version that's really old
-        // Keep the binary compatibility bridge for generated message classes, otherwise D8 fails
-        // because a transitive dependency is missing during KAPT and dexing.
-        exclude group: 'com.google.protobuf', module: 'protobuf-java'
-    }
-
-    // Explicitly provide the protobuf runtime used by bitcoinj and generated code.
-    implementation 'com.google.protobuf:protobuf-java:3.25.5'
+    api(project(':common'))
 
     // modules
     // We explictly include libwallet to workaround a limitation of module module builds with local deps
@@ -461,6 +453,12 @@ dependencies {
     implementation 'com.google.api-client:google-api-client-android:2.7.0'
     implementation 'com.google.apis:google-api-services-drive:v3-rev136-1.25.0'
     implementation 'com.google.http-client:google-http-client-gson:1.45.0'
+    implementation('com.google.api-client:google-api-client-android:2.7.0') {
+        exclude group: 'com.google.protobuf', module: 'protobuf-java'
+    }
+    implementation('com.google.apis:google-api-services-drive:v3-rev136-1.25.0') {
+        exclude group: 'com.google.protobuf', module: 'protobuf-java'
+    }
 
     // Kotlin:
     // Kotlin serialization runtime library. Note that while the plugin has version the same as
@@ -524,10 +522,13 @@ dependencies {
     implementation 'androidx.webkit:webkit:1.1.0'
 
     // Protobuf & grpc
-    api "io.grpc:grpc-protobuf-lite:$version_grpc"
+    api ("io.grpc:grpc-protobuf:$version_grpc") {
+        exclude group: 'com.google.protobuf', module: 'protobuf-java'
+    }
     api "io.grpc:grpc-stub:$version_grpc"
     api "io.grpc:grpc-okhttp:$version_grpc"
     api "io.grpc:grpc-android:$version_grpc"
+    implementation 'com.google.protobuf:protobuf-javalite:3.25.5'
 
     // ui
     kapt "com.jakewharton:butterknife-compiler:$version_butterknife"
@@ -609,6 +610,7 @@ configurations {
         // This entire block should be deleted when we move to minSdk 21.
         resolutionStrategy {
             force "io.grpc:grpc-core:1.57.2", "io.grpc:grpc-api:1.57.2"
+            force "com.google.protobuf:protobuf-java:3.25.5", "com.google.protobuf:protobuf-javalite:3.25.5"
         }
         exclude group: 'org.apache.httpcomponents', module: 'httpclient'
     }
