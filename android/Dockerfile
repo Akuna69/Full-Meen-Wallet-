@@ -64,7 +64,7 @@ ENV ANDROID_NDK_HOME ${ANDROID_HOME}/ndk/${NDK_VERSION}
 FROM --platform=linux/amd64 rust:1.84@sha256:738ae99a3d75623f41e6882566b4ef37e38a9840244a47efd4a0ca22e9628b88 AS rust_builder
 
 ARG RUSTUP_TOOLCHAIN=nightly-2024-12-16
-ARG TARGETS="aarch64-unknown-linux-musl x86_64-unknown-linux-musl aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android"
+ARG TARGETS="aarch64-unknown-linux-musl x86_64-unknown-linux-musl aarch64-linux-android x86_64-linux-android"
 
 RUN rustup toolchain install ${RUSTUP_TOOLCHAIN} \
     && rustup override set ${RUSTUP_TOOLCHAIN} \
@@ -93,7 +93,5 @@ RUN tools/bootstrap-gomobile.sh \
 FROM scratch
 
 COPY --from=build /src/android/apolloui/build/outputs/apk/prod/release/apolloui-prod-arm64-v8a-release-unsigned.apk apolloui-prod-arm64-v8a-release-unsigned.apk
-COPY --from=build /src/android/apolloui/build/outputs/apk/prod/release/apolloui-prod-armeabi-v7a-release-unsigned.apk apolloui-prod-armeabi-v7a-release-unsigned.apk
-COPY --from=build /src/android/apolloui/build/outputs/apk/prod/release/apolloui-prod-x86-release-unsigned.apk apolloui-prod-x86-release-unsigned.apk
 COPY --from=build /src/android/apolloui/build/outputs/apk/prod/release/apolloui-prod-x86_64-release-unsigned.apk apolloui-prod-x86_64-release-unsigned.apk
 COPY --from=build /src/android/apolloui/build/outputs/mapping/prodRelease/mapping.txt mapping.txt
