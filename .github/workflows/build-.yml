@@ -1,60 +1,76 @@
 name: Build Debug APK
 
 on:
-  push:
-    branches: [ master ]
   workflow_dispatch:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_NDK_VERSION: 27.2.12479018
+  GO_VERSION: '1.24.x'
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Set up JDK
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
 
-      - name: Set up Go
+      - name: Set up Go 1.24
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: |
+            libwallet/go.sum
+            libwallet/go.work.sum
 
-      - name: Install gomobile
+      - name: Set up Android SDK and NDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmake;3.22.1"
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          echo "${ANDROID_SDK_ROOT}/platform-tools" >> "$GITHUB_PATH"
+          echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+
+      - name: Install gomobile tools
         run: |
           go install golang.org/x/mobile/cmd/gomobile@latest
           go install golang.org/x/mobile/cmd/gobind@latest
-          echo "${HOME}/go/bin" >> $GITHUB_PATH
-          export PATH="$PATH:$HOME/go/bin"
-          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_SDK_ROOT}"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           gomobile init
 
-      - name: Build Rust Libraries for Android
+      - name: Build Rust libraries for Android
         run: |
-          cd libwallet/librs
-          chmod +x makelibs.sh
-          ./makelibs.sh
+          chmod +x libwallet/librs/makelibs.sh
+          libwallet/librs/makelibs.sh
 
-      - name: Build Go Wallet Libraries for Android
+      - name: Build Go wallet library for Android
         run: |
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_SDK_ROOT}"
           chmod +x tools/*.sh
           tools/bootstrap-gomobile.sh
-          ./tools/libwallet-android.sh android/apolloui/libs/libwallet.aar
+          tools/libwallet-android.sh android/apolloui/libs/libwallet.aar
 
-      - name: Crear google-services.json de prueba
+      - name: Create build-only google-services.json
         run: |
-          python3 - << 'EOF'
+          python3 - <<'PY'
           import json
-          pkgs = [
+
+          packages = [
               "io.muun.apollo",
               "io.muun.apollo.debug",
               "io.muun.apollo.regtest",
@@ -62,35 +78,42 @@ jobs:
               "io.muun.apollo.debug.regtest",
               "io.muun.apollo.debug.internal.beta",
           ]
+
           clients = []
-          for i, p in enumerate(pkgs):
+          for index, package_name in enumerate(packages):
               clients.append({
                   "client_info": {
-                      "mobilesdk_app_id": f"1:123456789012:android:0123456789abcdef{i:02x}",
-                      "android_client_info": { "package_name": p }
+                      "mobilesdk_app_id": f"1:123456789012:android:{index:032x}",
+                      "android_client_info": {"package_name": package_name},
                   },
-                  "api_key": [{ "current_key": "AIzaSyDummyKeyForBuildOnly0000000000" }]
+                  "api_key": [{"current_key": "AIzaSyDummyKeyForBuildOnly0000000000"}],
               })
+
           data = {
               "project_info": {
                   "project_number": "123456789012",
-                  "project_id": "meen-wallet-test",
-                  "storage_bucket": "meen-wallet-test.appspot.com"
+                  "project_id": "build-only-project",
+                  "storage_bucket": "build-only-project.appspot.com",
               },
               "client": clients,
-              "configuration_version": "1"
+              "configuration_version": "1",
           }
-          json.dump(data, open("android/apolloui/google-services.json", "w"), indent=2)
-          EOF
 
-      - name: Build Debug APK
-        run: |
-          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
-          chmod +x tools/*.sh
-          ./gradlew :android:apolloui:assembleProdDebug --console=plain
+          with open("android/apolloui/google-services.json", "w") as output:
+              json.dump(data, output, indent=2)
+          PY
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK
+        run: ./gradlew :android:apolloui:assembleProdDebug --stacktrace --no-daemon --console=plain
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: android/apolloui/build/outputs/apk/prod/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
