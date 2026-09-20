@@ -270,7 +270,7 @@ android {
 
             // Production application class, which is interpolated into AndroidManifest.xml
             manifestPlaceholders = [
-                    usseCleartextTraffic: 'false'
+                    usesCleartextTraffic: 'false'
             ]
 
             // server
@@ -385,7 +385,7 @@ android {
         // https://www.veskoiliev.com/running-android-unit-instrumentation-tests-from-the-console/
         unitTests.all {
             testLogging {
-                outputs.upToDateWhen { false }
+                outputsUpToDateWhen { false }
                 events "passed", "failed", "standardError"
                 showCauses true
                 showExceptions true
@@ -412,8 +412,13 @@ ext {
 dependencies {
     api(project(':common')) {
         // bitcoinj has a protobuf version that's really old
+        // Keep the binary compatibility bridge for generated message classes, otherwise D8 fails
+        // because a transitive dependency is missing during KAPT and dexing.
         exclude group: 'com.google.protobuf', module: 'protobuf-java'
     }
+
+    // Explicitly provide the protobuf runtime used by bitcoinj and generated code.
+    implementation 'com.google.protobuf:protobuf-java:3.25.5'
 
     // modules
     // We explictly include libwallet to workaround a limitation of module module builds with local deps
