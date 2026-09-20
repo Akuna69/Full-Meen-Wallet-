@@ -30,7 +30,7 @@
 
     <!-- Queries -->
     <!--
-    Package visibility filtering: https://developer.android.com/training/package-visibility
+     Package visibility filtering: https://developer.android.com/training/package-visibility
     -->
 
     <queries>
@@ -145,12 +145,14 @@
 
         <activity
                 android:name=".presentation.ui.signup.SignupActivity"
+                android:exported="false"
         />
 
         <!-- HomeActivity -->
 
         <activity
-                android:name=".presentation.ui.home.HomeActivity">
+                android:name=".presentation.ui.home.HomeActivity"
+                android:exported="false">
 
         </activity>
 
@@ -194,14 +196,16 @@
         <activity
                 android:name=".presentation.ui.nfc.NfcReaderActivity"
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
-                android:label="@string/nfc_reader_screen_title"/>
+                android:label="@string/nfc_reader_screen_title"
+                android:exported="false"/>
 
         <!-- OperationDetailActivity -->
 
         <activity
                 android:name=".presentation.ui.operation_detail.OperationDetailActivity"
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
-                android:label="@string/operation_detail_title"/>
+                android:label="@string/operation_detail_title"
+                android:exported="false"/>
 
         <!-- ShowQrActivity -->
 
@@ -209,6 +213,7 @@
                 android:name=".presentation.ui.show_qr.ShowQrActivity"
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
                 android:label="@string/showqr_title"
+                android:exported="false"
         />
 
         <!-- ScanQrActivity -->
@@ -218,6 +223,7 @@
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
                 android:label="@string/scanqr_title"
                 android:theme="@style/ScanQrAppTheme"
+                android:exported="false"
         />
 
         <!-- FeedbackActivity -->
@@ -226,6 +232,7 @@
                 android:name=".presentation.ui.feedback.email.FeedbackActivity"
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
                 android:label="@string/feedback_title"
+                android:exported="false"
         />
 
         <!-- SingleActionActivity -->
@@ -233,6 +240,7 @@
                 android:name=".presentation.ui.single_action.SingleActionActivity"
                 android:launchMode="singleTop"
                 android:label="Muun"
+                android:exported="false"
         />
 
         <!-- V2SingleActionActivity -->
@@ -240,6 +248,7 @@
         <activity
                 android:name="io.muun.apollo.presentation.ui.single_action.V2SingleActionActivity"
                 android:launchMode="singleTop"
+                android:exported="false"
         />
 
         <!-- DebugPanelActivity -->
@@ -248,6 +257,7 @@
                 android:name=".presentation.ui.debug.DebugPanelActivity"
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
                 android:label="Muun debug panel"
+                android:exported="false"
         />
 
         <!-- DebugSecureKeyValueStorageActivity -->
@@ -256,17 +266,20 @@
                 android:name=".presentation.ui.debug.securekv.DebugSecureKeyValueStorageActivity"
                 android:parentActivityName=".presentation.ui.debug.DebugPanelActivity"
                 android:label="SecureKeyValueStorage debug"
+                android:exported="false"
         />
 
         <!-- RecoveryToolActivity -->
         <activity
                 android:name="io.muun.apollo.presentation.ui.recovery_tool.RecoveryToolActivity"
+                android:exported="false"
                 />
 
         <!-- DiagnosticActivity -->
 
         <activity
                 android:name="io.muun.apollo.presentation.ui.diagnostic.DiagnosticActivity"
+                android:exported="false"
                 />
 
 
@@ -274,18 +287,21 @@
 
         <activity
             android:name=".presentation.ui.settings.edit_username.EditUsernameActivity"
+            android:exported="false"
             />
 
         <!-- SetUpPinCodeActivity -->
 
         <activity
                 android:name="io.muun.apollo.presentation.ui.setup_pin_code.SetUpPinCodeActivity"
+                android:exported="false"
                 />
 
         <!-- SecurityLogoutActivity -->
 
         <activity
                 android:name="io.muun.apollo.presentation.ui.security_logout.SecurityLogoutActivity"
+                android:exported="false"
                 />
 
         <!-- SetupRecoveryCodeActivity -->
@@ -294,30 +310,35 @@
                 android:name=".presentation.ui.recovery_code.SetupRecoveryCodeActivity"
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
                 android:label="@string/recovery_code_title"
+                android:exported="false"
                 />
 
         <!-- SelectCurrencyActivity -->
 
         <activity
                 android:name="io.muun.apollo.presentation.ui.select_currency.SelectCurrencyActivity"
+                android:exported="false"
         />
 
         <!-- SelectCountryActivity -->
 
         <activity
                 android:name="io.muun.apollo.presentation.ui.select_country.SelectCountryActivity"
+                android:exported="false"
         />
 
         <!-- ExportKeysActivity -->
 
         <activity
                 android:name="io.muun.apollo.presentation.ui.export_keys.EmergencyKitActivity"
+                android:exported="false"
         />
 
         <!-- TaprootSetupActivity -->
 
         <activity
             android:name="io.muun.apollo.presentation.ui.taproot_setup.TaprootSetupActivity"
+            android:exported="false"
             />
 
 
@@ -325,6 +346,7 @@
 
         <activity
             android:name=".presentation.ui.select_bitcoin_unit.SelectBitcoinUnitActivity"
+            android:exported="false"
         />
 
 
@@ -332,103 +354,124 @@
 
         <activity
                 android:name=".presentation.ui.settings.edit_password.EditPasswordActivity"
+                android:exported="false"
         />
 
         <!-- SetupP2PActivity -->
 
         <activity
                 android:name="io.muun.apollo.presentation.ui.setup_p2p.SetupP2PActivity"
+                android:exported="false"
         />
 
         <activity
                 android:name=".presentation.ui.send.SendActivity"
+                android:exported="false"
         />
 
         <activity
                 android:name=".presentation.ui.setup_password.SetupPasswordActivity"
+                android:exported="false"
                 />
 
         <!-- SuccessDeleteWalletActivity -->
 
         <activity
             android:name=".presentation.ui.settings.success_delete_wallet.SuccessDeleteWalletActivity"
+            android:exported="false"
             />
 
         <activity
                 android:name=".presentation.ui.feedback.anon.AnonFeedbackActivity"
                 android:parentActivityName=".presentation.ui.home.HomeActivity"
                 android:label="@string/feedback_title"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.migration.MigrationActivity"
+                android:exported="false"
                 />
 
         <!--   OperationsActivity   -->
         <activity
                 android:name=".presentation.ui.activity.operations.OperationsActivity"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.base.SingleFragmentActivityImpl"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.select_amount.SelectAmountActivity"
+                android:exported="false"
                 />
 
         <!-- SelectNightModeActivity -->
 
         <activity
                 android:name=".presentation.ui.select_night_mode.SelectNightModeActivity"
+                android:exported="false"
                 />
 
         <!-- LnUrlIntroActivity -->
 
         <activity
                 android:name=".presentation.ui.lnurl.intro.LnUrlIntroActivity"
+                android:exported="false"
                 />
 
         <!-- LnUrlWithdrawConfirmActivity -->
 
         <activity
                 android:name=".presentation.ui.lnurl.withdraw.confirm.LnUrlWithdrawConfirmActivity"
+                android:exported="false"
                 />
 
         <!-- LnUrlWithdrawActivity -->
 
         <activity
                 android:name=".presentation.ui.lnurl.withdraw.LnUrlWithdrawActivity"
+                android:exported="false"
                 />
 
         <!-- HighFeesExplanationActivity -->
 
         <activity
                 android:name=".presentation.ui.high_fees.HighFeesExplanationActivity"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.security_cards_marketplace.SecurityCardsMarketplaceActivity"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.security_cards_country_picker.CountryPickerActivity"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.security_cards_onboarding.SecurityCardsOnboardingActivity"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.security_cards_card_detail.CardDetailActivity"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.security_cards_full_specs.SecurityCardsFullSpecsActivity"
+                android:exported="false"
                 />
 
         <activity
                 android:name=".presentation.ui.security_cards_shipping_address.ShippingAddressActivity"
+                android:exported="false"
                 />
 
 
