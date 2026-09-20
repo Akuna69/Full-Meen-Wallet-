@@ -24,6 +24,17 @@ env:
   ANDROID_NDK_VERSION: 27.2.12479018
   GO_VERSION: '1.24.x'
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
+  JAVA_TOOL_OPTIONS: >-
+    --add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
+    --add-opens=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED
+    --add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED
 
 jobs:
   build:
@@ -164,10 +175,10 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME}"
           echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}"
 
-      - name: Build debug APK
+      - name: Clean and build debug APK
         run: |
           set -euo pipefail
-          ./gradlew :android:apolloui:assembleProdDebug \
+          ./gradlew clean :android:apolloui:assembleProdDebug \
             --stacktrace --info --no-daemon --console=plain \
             2>&1 | tee gradle-debug.log
 
