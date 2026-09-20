@@ -1,4 +1,4 @@
-name: Build Debug APK
+name: Build Android APKs
 
 on:
   workflow_dispatch:
@@ -11,11 +11,13 @@ permissions:
 env:
   ANDROID_NDK_VERSION: 27.2.12479018
   GO_VERSION: '1.24.x'
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
 
 jobs:
   build:
+    name: Build debug and release APKs
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
@@ -34,18 +36,19 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: |
-            libwallet/go.sum
-            libwallet/go.work.sum
 
       - name: Set up Android SDK and NDK
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmake;3.22.1"
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;3.22.1"
           echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
           echo "${ANDROID_SDK_ROOT}/platform-tools" >> "$GITHUB_PATH"
-          echo "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
       - name: Install gomobile tools
         run: |
@@ -57,13 +60,13 @@ jobs:
       - name: Build Rust libraries for Android
         run: |
           chmod +x libwallet/librs/makelibs.sh
-          libwallet/librs/makelibs.sh
+          libwallet/librs/makelibs.sh 2>&1 | tee rust-build.log
 
       - name: Build Go wallet library for Android
         run: |
           chmod +x tools/*.sh
-          tools/bootstrap-gomobile.sh
-          tools/libwallet-android.sh android/apolloui/libs/libwallet.aar
+          tools/bootstrap-gomobile.sh 2>&1 | tee gomobile-build.log
+          tools/libwallet-android.sh android/apolloui/libs/libwallet.aar 2>&1 | tee go-wallet-build.log
 
       - name: Create build-only google-services.json
         run: |
@@ -106,14 +109,53 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
-        run: ./gradlew :android:apolloui:assembleProdDebug --stacktrace --no-daemon --console=plain
+      - name: Show build environment
+        run: |
+          java -version
+          go version
+          ./gradlew --version
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}"
+          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}"
 
-      - name: Upload APK
+      - name: Build debug APK
+        run: |
+          ./gradlew :android:apolloui:assembleProdDebug \
+            --stacktrace --info --no-daemon --console=plain \
+            2>&1 | tee gradle-debug.log
+
+      - name: Build release APK
+        run: |
+          ./gradlew :android:apolloui:assembleProdRelease \
+            --stacktrace --info --no-daemon --console=plain \
+            2>&1 | tee gradle-release.log
+
+      - name: Upload debug APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: app-debug-apk
           path: android/apolloui/build/outputs/apk/prod/debug/*.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk-unsigned
+          path: android/apolloui/build/outputs/apk/prod/release/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-and-reports
+          path: |
+            *.log
+            android/apolloui/build/reports/**
+            android/apolloui/build/outputs/logs/**
+            android/apolloui/build/outputs/mapping/**
+          if-no-files-found: warn
+          retention-days: 14
