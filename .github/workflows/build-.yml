@@ -124,6 +124,13 @@ jobs:
           tools/bootstrap-gomobile.sh 2>&1 | tee gomobile-build.log
           tools/libwallet-android.sh android/apolloui/libs/libwallet.aar 2>&1 | tee go-wallet-build.log
 
+      - name: Create local.properties
+        run: |
+          set -euo pipefail
+          cat > local.properties <<EOF
+          sdk.dir=${ANDROID_HOME}
+          EOF
+
       - name: Create build-only google-services.json
         run: |
           set -euo pipefail
@@ -162,6 +169,26 @@ jobs:
           with open("android/apolloui/google-services.json", "w") as output:
               json.dump(data, output, indent=2)
           PY
+
+      - name: Create debug keystore for local build
+        run: |
+          set -euo pipefail
+          mkdir -p android/apolloui
+          keytool -genkeypair -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 3650 \
+            -keystore android/apolloui/debug.keystore \
+            -storepass android \
+            -keypass android \
+            -dname "CN=Build, OU=Build, O=Build, L=Local, S=Local, C=US"
+
+          cat > android/apolloui/dogfood-keystore.properties <<EOF
+          keystoreFile=android/apolloui/debug.keystore
+          storePassword=android
+          keyAlias=androiddebugkey
+          keyPassword=android
+          EOF
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
