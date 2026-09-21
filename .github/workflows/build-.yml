@@ -1,0 +1,115 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_NDK_VERSION: 27.2.12479018
+  GO_VERSION: '1.24.x'
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Go 1.24
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: SDK Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$ANDROID_HOME"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          else
+            echo "sdkmanager no encontrado"
+            exit 1
+          fi
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
+
+      - name: Instalar paquetes Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
+
+      - name: local.properties y google-services
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          mkdir -p android/apolloui
+          cat > android/apolloui/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "build-only-project",
+              "storage_bucket": "build-only-project.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:123456789012:android:0000000000000001",
+                "android_client_info": {"package_name": "io.muun.apollo"}
+              },
+              "api_key": [{"current_key": "AIzaSyDummyKeyForBuildOnly0000000000"}]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+
+      - name: Compilar Rust
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x libwallet/librs/makelibs.sh
+          TARGETS="aarch64-linux-android x86_64-linux-android" ./libwallet/librs/makelibs.sh
+
+      - name: AAR libwallet
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x tools/bootstrap-gomobile.sh tools/libwallet-android.sh
+          tools/libwallet-android.sh "$GITHUB_WORKSPACE/android/libwallet/libs/libwallet.aar"
+          test -s "$GITHUB_WORKSPACE/android/libwallet/libs/libwallet.aar"
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean :android:apolloui:assembleProdDebug --no-daemon --no-parallel --stacktrace --console=plain
+
+      - name: Subir APK generado
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/apolloui/build/outputs/apk/prod/debug/*.apk
