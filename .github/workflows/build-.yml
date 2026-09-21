@@ -1,5 +1,4 @@
-
-name: Compilar APK Muun
+name: Compilar APK Muon
 
 on:
   push:
@@ -30,9 +29,11 @@ jobs:
       - name: Compilar APK con Gradle
         run: ./gradlew assembleDebug --warning-mode all
 
-      # 5. Subir la APK generada para que puedas descargarla
+      # 5. Subir la APK generada para que puedas descargarla usando la ruta correcta del módulo
       - name: Subir archivo APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android/apollout/build/outputs/apk/debug/*.apk
+            android/apollo/build/outputs/apk/debug/*.apk
