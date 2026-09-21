@@ -1,4 +1,4 @@
-name: Compilar APK Muon
+name: Compilar APK Muun
 
 on:
   push:
@@ -25,15 +25,15 @@ jobs:
       - name: Dar permisos a gradlew
         run: chmod +x gradlew
 
-      # 4. Compilar la aplicación en modo Debug (genera la APK)
+      # 4. Compilar la aplicación apuntando al submódulo correcto
       - name: Compilar APK con Gradle
-        run: ./gradlew assembleDebug --warning-mode all
+        run: ./gradlew :android:apollo:assembleDebug --warning-mode all
 
-      # 5. Subir la APK generada para que puedas descargarla usando la ruta correcta del módulo
+      # 5. Subir la APK generada para que puedas descargarla
       - name: Subir archivo APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: |
-            android/apollout/build/outputs/apk/debug/*.apk
             android/apollo/build/outputs/apk/debug/*.apk
+            android/apollout/build/outputs/apk/debug/*.apk
