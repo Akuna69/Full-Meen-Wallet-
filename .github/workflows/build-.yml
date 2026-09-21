@@ -44,13 +44,28 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: false
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure Android SDK
+        run: |
+          set -euo pipefail
+          test -d "$ANDROID_HOME"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" || \
+            test -x "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER_DIR="$ANDROID_HOME/cmdline-tools/latest/bin"
+          else
+            SDKMANAGER_DIR="$ANDROID_HOME/cmdline-tools/16.0/bin"
+          fi
+
+          echo "$SDKMANAGER_DIR" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "ANDROID_SDK_MANAGER_DIR=$SDKMANAGER_DIR" >> "$GITHUB_ENV"
 
       - name: Install Android SDK packages
         run: |
           set -euo pipefail
-          sdkmanager --licenses >/dev/null || true
+          export PATH="$ANDROID_SDK_MANAGER_DIR:$ANDROID_HOME/platform-tools:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
@@ -62,9 +77,11 @@ jobs:
       - name: Verify build environment
         run: |
           set -euo pipefail
+          export PATH="$ANDROID_SDK_MANAGER_DIR:$ANDROID_HOME/platform-tools:$PATH"
           java -version
           go version
           docker --version
+          sdkmanager --version
           test -x "$ANDROID_HOME/platform-tools/adb"
           test -d "$ANDROID_NDK_HOME"
           echo "ANDROID_HOME=$ANDROID_HOME"
@@ -102,7 +119,6 @@ jobs:
           set -euo pipefail
           chmod +x libwallet/librs/makelibs.sh
           TARGETS="aarch64-linux-android x86_64-linux-android" \
-            USE_HOST_CARGO= \
             libwallet/librs/makelibs.sh
 
       - name: Build Android wallet AAR
@@ -110,7 +126,6 @@ jobs:
           set -euo pipefail
           chmod +x tools/bootstrap-gomobile.sh tools/libwallet-android.sh
           tools/bootstrap-gomobile.sh
-          mkdir -p android/libwallet/libs
           tools/libwallet-android.sh android/libwallet/libs/libwallet.aar
           test -s android/libwallet/libs/libwallet.aar
 
@@ -128,4 +143,4 @@ jobs:
       - name: Confirm APK output
         run: |
           set -euo pipefail
-          find android/apolloui/build/outputs/apk -type f -name '*.apk' -print -exec ls -lh {} \;
+          find android/apolloui/build/outputs/apk -type f -name '*.apk' -print -exec ls -lh {} \\\;
