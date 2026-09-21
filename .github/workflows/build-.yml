@@ -3,17 +3,28 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [master]
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_NDK_VERSION: 27.2.12479018
+  GO_VERSION: '1.24.x'
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
-
-    env:
-      ANDROID_NDK_VERSION: 27.2.12479018
-      GO_VERSION: '1.24.x'
-      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
+    timeout-minutes: 180
 
     steps:
       - name: Checkout repository
@@ -31,119 +42,90 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
-      - name: Install Android SDK + NDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/android-sdk"
-          cd "$RUNNER_TEMP/android-sdk"
-          curl -fsSL "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" -o cmdline-tools.zip
-          unzip -q cmdline-tools.zip
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          rm -rf "$ANDROID_HOME/cmdline-tools/latest"
-          mv cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-        env:
-          ANDROID_HOME: /opt/hostedtoolcache/android-sdk
-
-      - name: Install Android packages
-        run: |
-          set -euo pipefail
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --licenses >/dev/null || true
           sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
             "ndk;${ANDROID_NDK_VERSION}" \
             "cmake;3.22.1"
-          echo "ANDROID_HOME=${ANDROID_HOME}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
 
-      - name: Install gomobile
+      - name: Verify build environment
         run: |
           set -euo pipefail
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          go install golang.org/x/mobile/cmd/gobind@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-          gomobile init
+          java -version
+          go version
+          docker --version
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -d "$ANDROID_NDK_HOME"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+
+      - name: Prepare Android build files
+        run: |
+          set -euo pipefail
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > local.properties
+          mkdir -p android/apolloui
+          cat > android/apolloui/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "build-only-project",
+              "storage_bucket": "build-only-project.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:123456789012:android:0000000000000001",
+                  "android_client_info": {"package_name": "io.muun.apollo"}
+                },
+                "api_key": [
+                  {"current_key": "AIzaSyDummyKeyForBuildOnly0000000000"}
+                ]
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
 
       - name: Build Rust libraries
         run: |
           set -euo pipefail
           chmod +x libwallet/librs/makelibs.sh
-          libwallet/librs/makelibs.sh
+          TARGETS="aarch64-linux-android x86_64-linux-android" \
+            USE_HOST_CARGO= \
+            libwallet/librs/makelibs.sh
 
-      - name: Build Go Android libwallet
+      - name: Build Android wallet AAR
         run: |
           set -euo pipefail
-          chmod +x tools/*.sh
+          chmod +x tools/bootstrap-gomobile.sh tools/libwallet-android.sh
           tools/bootstrap-gomobile.sh
           mkdir -p android/libwallet/libs
-          tools/libwallet-android.sh android/apolloui/libs/libwallet.aar
+          tools/libwallet-android.sh android/libwallet/libs/libwallet.aar
+          test -s android/libwallet/libs/libwallet.aar
 
-      - name: Create local.properties
+      - name: Build production debug APK
         run: |
           set -euo pipefail
-          cat > local.properties <<EOF
-          sdk.dir=${ANDROID_HOME}
-          EOF
+          chmod +x gradlew
+          ./gradlew clean :android:apolloui:assembleProdDebug \
+            --no-daemon \
+            --no-parallel \
+            --stacktrace \
+            --warning-mode all \
+            --console=plain
 
-      - name: Create google-services.json
+      - name: Confirm APK output
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json
-          data = {
-              "project_info": {
-                  "project_number": "123456789012",
-                  "project_id": "build-only-project",
-                  "storage_bucket": "build-only-project.appspot.com"
-              },
-              "client": [
-                  {
-                      "client_info": {
-                          "mobilesdk_app_id": "1:123456789012:android:0000000000000000",
-                          "android_client_info": {
-                              "package_name": "io.muun.apollo"
-                          }
-                      },
-                      "api_key": [
-                          {
-                              "current_key": "AIzaSyDummyKeyForBuildOnly0000000000"
-                          }
-                      ]
-                  }
-              ],
-              "configuration_version": "1"
-          }
-          with open("android/apolloui/google-services.json", "w") as output:
-              json.dump(data, output, indent=2)
-          PY
-
-      - name: Create debug keystore
-        run: |
-          set -euo pipefail
-          mkdir -p android/apolloui
-          keytool -genkeypair -alias androiddebugkey \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 3650 \
-            -keystore android/apolloui/debug.keystore \
-            -storepass android \
-            -keypass android \
-            -dname "CN=Build, OU=Build, O=Build, L=Local, S=Local, C=US"
-
-          cat > android/apolloui/dogfood-keystore.properties <<EOF
-          keystoreFile=android/apolloui/debug.keystore
-          storePassword=android
-          keyAlias=androiddebugkey
-          keyPassword=android
-          EOF
-
-      - name: Build APK
-        run: |
-          set -euo pipefail
-          chmod +x ./gradlew
-          ./gradlew :android:apolloui:assembleProdDebug --no-daemon --stacktrace
+          find android/apolloui/build/outputs/apk -type f -name '*.apk' -print -exec ls -lh {} \;
