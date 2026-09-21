@@ -1,13 +1,18 @@
 pluginManagement {
     repositories {
         mavenCentral()
-        maven { url "https://plugins.gradle.org/m2/" }
+        maven { url 'https://plugins.gradle.org/m2' }
+        gradlePluginPortal()
     }
-
     plugins {
-        // Must match global_kotlin_version in top level build.gradle!
-        id 'org.jetbrains.kotlin.android' version "2.1.0"
+        // Debe coincidir con la versión de Kotlin del proyecto
+        id 'org.jetbrains.kotlin.android' version '2.1.0'
+        id 'com.google.protobuf' version '0.9.4'
+        id 'com.android.library' version '8.5.0'
     }
 }
 
-include ':android:apollo', ':common', ':android:apolloui', ':android:libwallet'
+include ':android:apollo', ':common', ':android:apollout', ':android:libwallet'
+
+// Forzar la ruta exacta del directorio para evitar el error de que "no existe"
+project(':android:apollout').projectDir = file('android/apollout')
