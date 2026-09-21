@@ -6,7 +6,7 @@ on:
     branches: [master]
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   ANDROID_HOME: /usr/local/lib/android/sdk
@@ -108,8 +108,15 @@ jobs:
           chmod +x ./gradlew
           ./gradlew clean :android:apolloui:assembleProdDebug --no-daemon --no-parallel --stacktrace --console=plain
 
-      - name: Subir APK generado
-        uses: actions/upload-artifact@v4
+      - name: Subir APK a Releases
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'
         with:
-          name: app-debug-apk
-          path: android/apolloui/build/outputs/apk/prod/debug/*.apk
+          files: android/apolloui/build/outputs/apk/prod/debug/*.apk
+          tag_name: v55.100
+          name: meen-v55.100
+          body: "APK compilado automáticamente desde GitHub Actions."
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
