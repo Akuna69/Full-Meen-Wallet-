@@ -3,11 +3,10 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
+    branches: [master]
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   ANDROID_HOME: /usr/local/lib/android/sdk
@@ -27,51 +26,43 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up JDK 17
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Go 1.24
+      - name: Go 1.24
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: false
 
-      - name: Install Android command-line tools
+      - name: SDK Android
         shell: bash
         run: |
           set -euo pipefail
-
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-            curl -L https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdline-tools.zip
-            unzip -o /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"
-            if [ -d "$ANDROID_HOME/cmdline-tools/cmdline-tools" ]; then
-              mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-            fi
+          test -d "$ANDROID_HOME"
+          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -x "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+          else
+            echo "sdkmanager no encontrado"
+            exit 1
           fi
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
 
-          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
-      - name: Install required Android packages
+      - name: Instalar paquetes Android
         shell: bash
         run: |
           set -euo pipefail
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            "cmdline-tools;latest" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0" \
-            "ndk;${ANDROID_NDK_VERSION}" \
-            "cmake;3.22.1"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> "$GITHUB_ENV"
 
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
-
-      - name: Prepare app build files
+      - name: local.properties y google-services
         shell: bash
         run: |
           set -euo pipefail
@@ -95,29 +86,38 @@ jobs:
           }
           JSON
 
-      - name: Build Rust libs
+      - name: Compilar Rust
         shell: bash
         run: |
           set -euo pipefail
           chmod +x libwallet/librs/makelibs.sh
           TARGETS="aarch64-linux-android x86_64-linux-android" ./libwallet/librs/makelibs.sh
 
-      - name: Generate libwallet AAR
+      - name: AAR libwallet
         shell: bash
         run: |
           set -euo pipefail
           chmod +x tools/bootstrap-gomobile.sh tools/libwallet-android.sh
-          tools/bootstrap-gomobile.sh
-          tools/libwallet-android.sh android/libwallet/libs/libwallet.aar
-          test -s android/libwallet/libs/libwallet.aar
+          tools/libwallet-android.sh "$GITHUB_WORKSPACE/android/libwallet/libs/libwallet.aar"
+          test -s "$GITHUB_WORKSPACE/android/libwallet/libs/libwallet.aar"
 
       - name: Build APK
         shell: bash
         run: |
           set -euo pipefail
           chmod +x ./gradlew
-          ./gradlew clean :android:apolloui:assembleProdDebug \
-            --no-daemon \
-            --no-parallel \
-            --stacktrace \
-            --console=plain
+          ./gradlew clean :android:apolloui:assembleProdDebug --no-daemon --max-workers=2 -Dandroid.packaging.resources.excludes=META-INF/*.version -Dandroid.dependency.verification.clear=true --stacktrace --console=plain
+
+      - name: Subir APK a Releases
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'
+        with:
+          files: android/apolloui/build/outputs/apk/prod/debug/*.apk
+          tag_name: v55.100
+          name: muun-v55.100
+          body: "APK de Muun Wallet compilado automáticamente desde GitHub Actions."
+          draft: false
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
