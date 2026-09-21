@@ -1,0 +1,123 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_NDK_VERSION: 27.2.12479018
+  GO_VERSION: '1.24.x'
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Go 1.24
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Install Android command-line tools
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            curl -L https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/cmdline-tools.zip
+            unzip -o /tmp/cmdline-tools.zip -d "$ANDROID_HOME/cmdline-tools"
+            if [ -d "$ANDROID_HOME/cmdline-tools/cmdline-tools" ]; then
+              mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+            fi
+          fi
+
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+      - name: Install required Android packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "cmdline-tools;latest" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;3.22.1"
+
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Prepare app build files
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          mkdir -p android/apolloui
+          cat > android/apolloui/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "123456789012",
+              "project_id": "build-only-project",
+              "storage_bucket": "build-only-project.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:123456789012:android:0000000000000001",
+                "android_client_info": {"package_name": "io.muun.apollo"}
+              },
+              "api_key": [{"current_key": "AIzaSyDummyKeyForBuildOnly0000000000"}]
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+
+      - name: Build Rust libs
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x libwallet/librs/makelibs.sh
+          TARGETS="aarch64-linux-android x86_64-linux-android" ./libwallet/librs/makelibs.sh
+
+      - name: Generate libwallet AAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x tools/bootstrap-gomobile.sh tools/libwallet-android.sh
+          tools/bootstrap-gomobile.sh
+          tools/libwallet-android.sh android/libwallet/libs/libwallet.aar
+          test -s android/libwallet/libs/libwallet.aar
+
+      - name: Build APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean :android:apolloui:assembleProdDebug \
+            --no-daemon \
+            --no-parallel \
+            --stacktrace \
+            --console=plain
