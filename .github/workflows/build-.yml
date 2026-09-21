@@ -1,47 +1,19 @@
-name: Build Android APKs
+name: Build Android APK
 
 on:
   workflow_dispatch:
-    inputs:
-      build_release:
-        description: Build the unsigned release APK too
-        required: false
-        default: true
-        type: boolean
   push:
     branches: [master]
-    tags:
-      - 'v*'
-
-permissions:
-  contents: read
-
-concurrency:
-  group: android-build-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  ANDROID_NDK_VERSION: 27.2.12479018
-  GO_VERSION: '1.24.x'
-  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
-  JAVA_TOOL_OPTIONS: >-
-    --add-opens=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
-    --add-opens=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED
-    --add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED
 
 jobs:
   build:
-    name: Build debug and release APKs
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    environment: ${{ startsWith(github.ref, 'refs/tags/') && 'release' || 'development' }}
+
+    env:
+      ANDROID_NDK_VERSION: 27.2.12479018
+      GO_VERSION: '1.24.x'
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g
 
     steps:
       - name: Checkout repository
@@ -49,31 +21,18 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up JDK 17 with Gradle cache
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
-      - name: Set up Go 1.24 with dependency cache
+      - name: Set up Go 1.24
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: true
 
-      - name: Cache Go build and module data
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('libwallet/**/go.sum', 'libwallet/**/go.mod') }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ env.GO_VERSION }}-
-            ${{ runner.os }}-go-
-
-      - name: Install Android command line tools
+      - name: Install Android SDK + NDK
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/android-sdk"
@@ -88,7 +47,7 @@ jobs:
         env:
           ANDROID_HOME: /opt/hostedtoolcache/android-sdk
 
-      - name: Set up Android SDK and NDK
+      - name: Install Android packages
         run: |
           set -euo pipefail
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
@@ -101,9 +60,8 @@ jobs:
             "cmake;3.22.1"
           echo "ANDROID_HOME=${ANDROID_HOME}" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
-          echo "${ANDROID_HOME}/platform-tools" >> "$GITHUB_PATH"
 
-      - name: Install gomobile tools
+      - name: Install gomobile
         run: |
           set -euo pipefail
           go install golang.org/x/mobile/cmd/gomobile@latest
@@ -111,18 +69,19 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           gomobile init
 
-      - name: Build Rust libraries for Android
+      - name: Build Rust libraries
         run: |
           set -euo pipefail
           chmod +x libwallet/librs/makelibs.sh
-          libwallet/librs/makelibs.sh 2>&1 | tee rust-build.log
+          libwallet/librs/makelibs.sh
 
-      - name: Build Go wallet library for Android
+      - name: Build Go Android libwallet
         run: |
           set -euo pipefail
           chmod +x tools/*.sh
-          tools/bootstrap-gomobile.sh 2>&1 | tee gomobile-build.log
-          tools/libwallet-android.sh android/apolloui/libs/libwallet.aar 2>&1 | tee go-wallet-build.log
+          tools/bootstrap-gomobile.sh
+          mkdir -p android/libwallet/libs
+          tools/libwallet-android.sh android/apolloui/libs/libwallet.aar
 
       - name: Create local.properties
         run: |
@@ -131,46 +90,39 @@ jobs:
           sdk.dir=${ANDROID_HOME}
           EOF
 
-      - name: Create build-only google-services.json
+      - name: Create google-services.json
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
-
-          packages = [
-              "io.muun.apollo",
-              "io.muun.apollo.debug",
-              "io.muun.apollo.regtest",
-              "io.muun.apollo.internal.beta",
-              "io.muun.apollo.debug.regtest",
-              "io.muun.apollo.debug.internal.beta",
-          ]
-
-          clients = []
-          for index, package_name in enumerate(packages):
-              clients.append({
-                  "client_info": {
-                      "mobilesdk_app_id": f"1:123456789012:android:{index:032x}",
-                      "android_client_info": {"package_name": package_name},
-                  },
-                  "api_key": [{"current_key": "AIzaSyDummyKeyForBuildOnly0000000000"}],
-              })
-
           data = {
               "project_info": {
                   "project_number": "123456789012",
                   "project_id": "build-only-project",
-                  "storage_bucket": "build-only-project.appspot.com",
+                  "storage_bucket": "build-only-project.appspot.com"
               },
-              "client": clients,
-              "configuration_version": "1",
+              "client": [
+                  {
+                      "client_info": {
+                          "mobilesdk_app_id": "1:123456789012:android:0000000000000000",
+                          "android_client_info": {
+                              "package_name": "io.muun.apollo"
+                          }
+                      },
+                      "api_key": [
+                          {
+                              "current_key": "AIzaSyDummyKeyForBuildOnly0000000000"
+                          }
+                      ]
+                  }
+              ],
+              "configuration_version": "1"
           }
-
           with open("android/apolloui/google-services.json", "w") as output:
               json.dump(data, output, indent=2)
           PY
 
-      - name: Create debug keystore for local build
+      - name: Create debug keystore
         run: |
           set -euo pipefail
           mkdir -p android/apolloui
@@ -190,92 +142,8 @@ jobs:
           keyPassword=android
           EOF
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Show build environment
+      - name: Build APK
         run: |
           set -euo pipefail
-          java -version
-          go version
-          ./gradlew --version
-          echo "ANDROID_HOME=${ANDROID_HOME}"
-          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}"
-
-      - name: Clean and build debug APK
-        run: |
-          set -euo pipefail
-          ./gradlew clean :android:apolloui:assembleProdDebug \
-            --stacktrace --info --no-daemon --console=plain \
-            2>&1 | tee gradle-debug.log
-
-      - name: Build release APK
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_release }}
-        run: |
-          set -euo pipefail
-          ./gradlew :android:apolloui:assembleProdRelease \
-            --stacktrace --info --no-daemon --console=plain \
-            2>&1 | tee gradle-release.log
-
-      - name: Locate and rename APKs
-        if: success()
-        run: |
-          set -euo pipefail
-          mkdir -p packaged-apks
-
-          debug_apks=$(find android/apolloui/build/outputs/apk -type f -path '*debug*/*.apk' -print)
-          if [ -z "$debug_apks" ]; then
-            echo "No debug APK was generated. Available output files:"
-            find android/apolloui/build/outputs -maxdepth 8 -type f -print 2>/dev/null || true
-            exit 1
-          fi
-
-          debug_index=0
-          while IFS= read -r apk; do
-            debug_index=$((debug_index + 1))
-            cp "$apk" "packaged-apks/Full-Meen-Wallet-debug-${GITHUB_RUN_NUMBER}-${debug_index}.apk"
-          done <<< "$debug_apks"
-
-          if [ -d android/apolloui/build/outputs/apk ]; then
-            release_apks=$(find android/apolloui/build/outputs/apk -type f -path '*release*/*.apk' -print || true)
-            release_index=0
-            if [ -n "$release_apks" ]; then
-              while IFS= read -r apk; do
-                release_index=$((release_index + 1))
-                cp "$apk" "packaged-apks/Full-Meen-Wallet-release-unsigned-${GITHUB_RUN_NUMBER}-${release_index}.apk"
-              done <<< "$release_apks"
-            fi
-          fi
-
-          ls -lh packaged-apks
-
-      - name: Upload debug APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Full-Meen-Wallet-debug-${{ github.run_number }}
-          path: packaged-apks/*debug*.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload release APK
-        if: ${{ success() && (github.event_name != 'workflow_dispatch' || inputs.build_release) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: Full-Meen-Wallet-release-unsigned-${{ github.run_number }}
-          path: packaged-apks/*release*.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload build logs and reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-and-reports-${{ github.run_number }}
-          path: |
-            *.log
-            android/apolloui/build/reports/**
-            android/apolloui/build/outputs/logs/**
-            android/apolloui/build/outputs/mapping/**
-          if-no-files-found: warn
-          retention-days: 14
+          chmod +x ./gradlew
+          ./gradlew :android:apolloui:assembleProdDebug --no-daemon --stacktrace
