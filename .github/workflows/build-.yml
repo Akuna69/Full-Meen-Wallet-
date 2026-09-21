@@ -114,9 +114,10 @@ jobs:
         with:
           files: android/apolloui/build/outputs/apk/prod/debug/*.apk
           tag_name: v55.100
-          name: meen-v55.100
-          body: "APK compilado automáticamente desde GitHub Actions."
+          name: muun-v55.100
+          body: "APK de Muun Wallet compilado automáticamente desde GitHub Actions."
           draft: false
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
